@@ -81,10 +81,36 @@
           .map((url, i) => `<li><a href="${url}" target="_blank" rel="noreferrer">Download part ${i + 1}</a></li>`)
           .join("");
         content.innerHTML = `
-          ${launcher ? `<p><a href="${launcher}" target="_blank" rel="noreferrer">Download auto-extract launcher (.cmd)</a></p>` : ""}
+          ${launcher ? `<p><a href="${launcher}" id="launcher-link">Download auto-extract launcher (.cmd)</a></p>` : ""}
           ${parts.length ? `<ul>${partLinks}</ul>` : ""}
           <p class="muted">Download all parts to one folder, run the .cmd, then start SlideShow.exe.</p>
         `;
+        if (launcher) {
+          const launcherLink = document.getElementById("launcher-link");
+          if (launcherLink) {
+            launcherLink.addEventListener("click", async (event) => {
+              event.preventDefault();
+              try {
+                const response = await fetch(launcher);
+                if (!response.ok) {
+                  throw new Error("failed");
+                }
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const fileName = (launcher.split("/").pop() || "extract.cmd").split("?")[0];
+                const a = document.createElement("a");
+                a.href = objectUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(objectUrl);
+              } catch (_) {
+                window.open(launcher, "_blank", "noopener,noreferrer");
+              }
+            });
+          }
+        }
       }
 
       loadManifest().then((manifest) => {

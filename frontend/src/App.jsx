@@ -67,6 +67,38 @@ async function forceDownloadFile(url, fallbackName = "download.bin") {
   URL.revokeObjectURL(objectUrl);
 }
 
+function buildExtractCmd(archiveBaseName, partNames) {
+  const copyList = partNames.map((name) => `"${name}"`).join("+");
+  return [
+    "@echo off",
+    "setlocal",
+    `set "ARCHIVE_BASE=${archiveBaseName}"`,
+    `set "COPY_LIST=${copyList}"`,
+    "set \"WORK_ZIP=%TEMP%\\%ARCHIVE_BASE%\"",
+    "set \"TARGET_DIR=%~dp0%ARCHIVE_BASE%\"",
+    "if exist \"%WORK_ZIP%\" del /f /q \"%WORK_ZIP%\" >nul 2>nul",
+    "echo Combining multi-volume archive...",
+    "copy /b %COPY_LIST% \"%WORK_ZIP%\" >nul",
+    "if errorlevel 1 (",
+    "  echo Failed to combine archive parts. Ensure all parts are in this folder.",
+    "  pause",
+    "  exit /b 1",
+    ")",
+    "echo Extracting archive...",
+    "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath '%WORK_ZIP%' -DestinationPath '%TARGET_DIR%' -Force\"",
+    "if errorlevel 1 (",
+    "  echo Extraction failed.",
+    "  pause",
+    "  exit /b 1",
+    ")",
+    "del /f /q \"%WORK_ZIP%\" >nul 2>nul",
+    "echo Done. Extracted to:",
+    "echo %TARGET_DIR%",
+    "pause",
+    "",
+  ].join("\r\n");
+}
+
 function App() {
   const [project, setProject] = useState(null);
   const [frames, setFrames] = useState([]);
@@ -475,15 +507,37 @@ function App() {
 
   async function onDownloadLauncher(event) {
     event.preventDefault();
-    if (!electronExtractLauncherUrl) {
+    if (!electronExtractLauncherUrl && electronDownloads.length === 0) {
       return;
     }
     try {
-      const fileName = electronExtractLauncherUrl.split("/").pop() || "extract.cmd";
-      await forceDownloadFile(electronExtractLauncherUrl, fileName);
+      const fileNameFromUrl =
+        (electronExtractLauncherUrl && electronExtractLauncherUrl.split("/").pop()) || "";
+      const launcherFileName = (fileNameFromUrl.split("?")[0] || "extract.cmd").trim();
+      if (electronExtractLauncherUrl) {
+        await forceDownloadFile(electronExtractLauncherUrl, launcherFileName);
+        return;
+      }
+      const partNames = electronDownloads
+        .map((url) => {
+          const fileName = (url.split("/").pop() || "").split("?")[0];
+          return decodeURIComponent(fileName);
+        })
+        .filter(Boolean);
+      const firstPart = partNames[0] || "";
+      const archiveBaseName = firstPart.replace(/\.\d{3}$/i, "") || "SlideShow.zip";
+      const cmdText = buildExtractCmd(archiveBaseName, partNames);
+      const blob = new Blob([cmdText], { type: "application/octet-stream" });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `${archiveBaseName}.extract.cmd`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
     } catch {
-      // Fallback to regular navigation if fetch-based download fails.
-      window.open(electronExtractLauncherUrl, "_blank", "noopener,noreferrer");
+      // no-op: if download fails, user can still download archive parts directly
     }
   }
 
