@@ -9,6 +9,7 @@ const appDirName = "SlideShow-win32-x64";
 const PART_SIZE_MB = Math.max(1, Number(process.env.ELECTRON_ARCHIVE_PART_MB || 90));
 const PART_SIZE_BYTES = PART_SIZE_MB * 1024 * 1024;
 const GITHUB_REPO = process.env.GITHUB_REPO || "victordoshenko/SlideShow";
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
 const KEEP_LOCALES = (process.env.ELECTRON_KEEP_LOCALES || "en-US")
   .split(",")
   .map((value) => value.trim())
@@ -197,9 +198,9 @@ function main() {
         launcherFileName,
         partSizeMb: PART_SIZE_MB,
         partDownloadUrls: parts.map(
-          (name) => `https://github.com/${GITHUB_REPO}/releases/latest/download/${name}`
+          (name) => `https://github.com/${GITHUB_REPO}/blob/${GITHUB_BRANCH}/releases/${name}`
         ),
-        launcherDownloadUrl: `https://github.com/${GITHUB_REPO}/releases/latest/download/${launcherFileName}`,
+        launcherDownloadUrl: `https://github.com/${GITHUB_REPO}/blob/${GITHUB_BRANCH}/releases/${launcherFileName}`,
         builtAt: new Date().toISOString(),
       },
       null,
