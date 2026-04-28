@@ -37,6 +37,19 @@ const downloadProtocol =
   typeof window !== "undefined" && window.location?.protocol
     ? window.location.protocol
     : "http:";
+const LANDING_MODE =
+  import.meta.env.VITE_LANDING_MODE === "1" ||
+  import.meta.env.VITE_LANDING_MODE === "true" ||
+  (typeof window !== "undefined" && window.location?.hostname?.endsWith("github.io"));
+const GITHUB_REPO = String(import.meta.env.VITE_GITHUB_REPO || "victordoshenko/SlideShow").trim();
+
+function parseEnvLinks(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function App() {
   const [project, setProject] = useState(null);
   const [frames, setFrames] = useState([]);
@@ -47,8 +60,17 @@ function App() {
   const [renderJob, setRenderJob] = useState(null);
   const [renderDebug, setRenderDebug] = useState(null);
   const [renderPreset, setRenderPreset] = useState("small");
-  const [electronDownloads, setElectronDownloads] = useState([]);
-  const [electronExtractLauncherUrl, setElectronExtractLauncherUrl] = useState("");
+  const [electronDownloads, setElectronDownloads] = useState(() => {
+    const explicit = parseEnvLinks(import.meta.env.VITE_ELECTRON_DOWNLOAD_URLS);
+    if (explicit.length > 0) {
+      return explicit;
+    }
+    const fallbackSingle = String(import.meta.env.VITE_ELECTRON_DOWNLOAD_URL || "").trim();
+    return fallbackSingle ? [fallbackSingle] : [];
+  });
+  const [electronExtractLauncherUrl, setElectronExtractLauncherUrl] = useState(
+    String(import.meta.env.VITE_ELECTRON_EXTRACT_URL || "").trim()
+  );
   const [uploadProgress, setUploadProgress] = useState({
     active: false,
     label: "",
@@ -94,6 +116,50 @@ function App() {
   }
 
   useEffect(() => {
+    if (!LANDING_MODE) {
+      return undefined;
+    }
+    // In GitHub Pages mode, discover the latest release assets directly from GitHub API.
+    let mounted = true;
+    fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
+      .then((response) => response.json())
+      .then((release) => {
+        if (!mounted || !Array.isArray(release?.assets)) {
+          return;
+        }
+        const assets = release.assets
+          .map((asset) => ({
+            name: asset?.name || "",
+            url: asset?.browser_download_url || "",
+          }))
+          .filter((asset) => asset.url);
+        const extractAsset = assets.find((asset) =>
+          /^SlideShow-win32-x64-portable(?:-lite)?-\d{14}\.zip\.extract\.cmd$/i.test(asset.name)
+        );
+        const partAssets = assets
+          .filter((asset) =>
+            /^SlideShow-win32-x64-portable(?:-lite)?-\d{14}\.zip\.\d{3}$/i.test(asset.name)
+          )
+          .sort((a, b) => a.name.localeCompare(b.name));
+        if (extractAsset) {
+          setElectronExtractLauncherUrl(extractAsset.url);
+        }
+        if (partAssets.length > 0) {
+          setElectronDownloads(partAssets.map((asset) => asset.url));
+        }
+      })
+      .catch(() => {
+        // keep env-provided links as fallback
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (LANDING_MODE) {
+      return undefined;
+    }
     let mounted = true;
     waitForServerReady()
       .then(() => createProject(`Project ${new Date().toLocaleString()}`))
@@ -110,6 +176,9 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (LANDING_MODE) {
+      return undefined;
+    }
     if (import.meta.env.VITE_ELECTRON_DOWNLOAD_URL && import.meta.env.VITE_ELECTRON_DOWNLOAD_URL.trim()) {
       setElectronDownloads([import.meta.env.VITE_ELECTRON_DOWNLOAD_URL.trim()]);
       return;
@@ -158,6 +227,9 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (LANDING_MODE) {
+      return undefined;
+    }
     if (!renderJob?.id || renderJob.status === "done" || renderJob.status === "failed") {
       return undefined;
     }
@@ -350,6 +422,48 @@ function App() {
 
   function onSelectFrame(index) {
     setActiveFrameIndex(index);
+  }
+
+  if (LANDING_MODE) {
+    return (
+      <main className="layout">
+        <h1>SlideShow Desktop</h1>
+        <p className="muted">
+          Desktop app for fast photo-to-video rendering with smooth transitions and render presets.
+        </p>
+        <section className="card">
+          <h2>Downloads</h2>
+          {electronExtractLauncherUrl && (
+            <p>
+              <a href={electronExtractLauncherUrl} target="_blank" rel="noreferrer">
+                Download auto-extract launcher
+              </a>
+            </p>
+          )}
+          {electronDownloads.length > 0 ? (
+            <p>
+              {electronDownloads.map((url, index) => (
+                <span key={url}>
+                  {index > 0 ? " | " : ""}
+                  <a href={url} target="_blank" rel="noreferrer">
+                    {electronDownloads.length > 1 ? `Download part ${index + 1}` : "Download build"}
+                  </a>
+                </span>
+              ))}
+            </p>
+          ) : (
+            <p className="muted">Build links will be published here.</p>
+          )}
+        </section>
+        <section className="card">
+          <h2>How to install</h2>
+          <p className="muted">
+            Download all archive parts to one folder. Run the auto-extract launcher, then start
+            <code> SlideShow.exe </code> from the extracted folder.
+          </p>
+        </section>
+      </main>
+    );
   }
 
   return (
