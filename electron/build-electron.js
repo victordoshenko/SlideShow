@@ -4,9 +4,11 @@ const { execSync } = require("child_process");
 
 const rootDir = path.resolve(__dirname, "..");
 const releasesDir = path.join(rootDir, "releases");
+const pagesManifestPath = path.join(rootDir, "frontend", "public", "latest-electron.json");
 const appDirName = "SlideShow-win32-x64";
 const PART_SIZE_MB = Math.max(1, Number(process.env.ELECTRON_ARCHIVE_PART_MB || 90));
 const PART_SIZE_BYTES = PART_SIZE_MB * 1024 * 1024;
+const GITHUB_REPO = process.env.GITHUB_REPO || "victordoshenko/SlideShow";
 const KEEP_LOCALES = (process.env.ELECTRON_KEEP_LOCALES || "en-US")
   .split(",")
   .map((value) => value.trim())
@@ -177,6 +179,27 @@ function main() {
         parts,
         launcherFileName,
         partSizeMb: PART_SIZE_MB,
+        builtAt: new Date().toISOString(),
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  fs.writeFileSync(
+    pagesManifestPath,
+    JSON.stringify(
+      {
+        fileName: parts[0],
+        archiveBaseName: fileName,
+        multipart: parts.length > 1,
+        parts,
+        launcherFileName,
+        partSizeMb: PART_SIZE_MB,
+        partDownloadUrls: parts.map(
+          (name) => `https://github.com/${GITHUB_REPO}/releases/latest/download/${name}`
+        ),
+        launcherDownloadUrl: `https://github.com/${GITHUB_REPO}/releases/latest/download/${launcherFileName}`,
         builtAt: new Date().toISOString(),
       },
       null,

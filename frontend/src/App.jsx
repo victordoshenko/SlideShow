@@ -42,6 +42,7 @@ const LANDING_MODE =
   import.meta.env.VITE_LANDING_MODE === "true" ||
   (typeof window !== "undefined" && window.location?.hostname?.endsWith("github.io"));
 const GITHUB_REPO = String(import.meta.env.VITE_GITHUB_REPO || "victordoshenko/SlideShow").trim();
+const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`;
 
 function parseEnvLinks(raw) {
   return String(raw || "")
@@ -119,6 +120,38 @@ function App() {
     if (!LANDING_MODE) {
       return undefined;
     }
+    let mounted = true;
+    fetch(`${import.meta.env.BASE_URL}latest-electron.json`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((manifest) => {
+        if (!mounted || !manifest) {
+          return;
+        }
+        const urls = Array.isArray(manifest?.partDownloadUrls)
+          ? manifest.partDownloadUrls.filter(Boolean)
+          : [];
+        if (urls.length > 0) {
+          setElectronDownloads(urls);
+        }
+        if (manifest?.launcherDownloadUrl) {
+          setElectronExtractLauncherUrl(String(manifest.launcherDownloadUrl));
+        }
+      })
+      .catch(() => {
+        // ignore; fallback to GitHub API below
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!LANDING_MODE) {
+      return undefined;
+    }
+    if (electronDownloads.length > 0 || electronExtractLauncherUrl) {
+      return undefined;
+    }
     // In GitHub Pages mode, discover the latest release assets directly from GitHub API.
     let mounted = true;
     fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
@@ -154,7 +187,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [electronDownloads.length, electronExtractLauncherUrl]);
 
   useEffect(() => {
     if (LANDING_MODE) {
@@ -452,7 +485,12 @@ function App() {
               ))}
             </p>
           ) : (
-            <p className="muted">Build links will be published here.</p>
+            <p className="muted">
+              Build links are not available yet.{" "}
+              <a href={GITHUB_RELEASES_URL} target="_blank" rel="noreferrer">
+                Open GitHub Releases
+              </a>
+            </p>
           )}
         </section>
         <section className="card">
