@@ -9,8 +9,3 @@ frontend/dist/
 Thumbs.db
 releases/SlideShow-win32-x64/
 releases/__zip_stage/
-releases/win-unpacked/
-releases/*.zip
-releases/*.zip.*
-releases/*.extract.cmd
-releases/latest-electron.json
