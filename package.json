@@ -1,10 +1,14 @@
 {
   "name": "slideshow",
   "version": "1.0.0",
-  "description": "",
+  "description": "Desktop slideshow renderer",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "build": "npm run build --prefix frontend",
+    "electron:dev": "npm run build --prefix frontend && electron .",
+    "electron:build": "node electron/build-electron.js",
+    "electron:installer": "npm run electron:build && node electron/build-installer.js",
     "start": "npm run start --prefix backend",
     "test": "npm run test --prefix backend"
   },
@@ -13,6 +17,10 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "electron": "^37.0.0",
+    "electron-builder": "^25.1.8",
+    "electron-packager": "^17.1.2",
+    "electron-winstaller": "^5.4.0"
   }
 }

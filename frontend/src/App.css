@@ -66,6 +66,21 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.presetRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(220px, 1fr);
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.presetHint {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.84rem;
+  line-height: 1.3;
+  padding-bottom: 0.45rem;
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -81,6 +96,7 @@ label {
 
 input[type="number"],
 input[type="file"],
+select,
 button {
   background: #1e293b;
   color: #f8fafc;

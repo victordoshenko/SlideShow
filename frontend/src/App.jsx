@@ -4,14 +4,39 @@ import {
   buildDownloadUrl,
   createProject,
   getFrames,
+  getLatestElectronDownload,
   getRenderJob,
   getRenderJobDebug,
   startRender,
   updateSettings,
   uploadFiles,
   uploadZip,
+  waitForServerReady,
 } from "./api";
 
+const RENDER_PRESET_OPTIONS = [
+  { value: "quality", label: "Quality" },
+  { value: "balanced", label: "Balanced" },
+  { value: "small", label: "Small size" },
+];
+const RENDER_PRESET_HINTS = {
+  quality: "Best visual quality, larger file size, usually slower render.",
+  balanced: "Middle ground between quality and output size.",
+  small: "Smallest file size, lower motion smoothness in transitions.",
+};
+const isFileProtocol =
+  typeof window !== "undefined" && window.location?.protocol === "file:";
+const isWebProtocol =
+  typeof window !== "undefined" &&
+  (window.location?.protocol === "http:" || window.location?.protocol === "https:");
+const downloadHost =
+  typeof window !== "undefined" && window.location?.hostname
+    ? window.location.hostname
+    : "127.0.0.1";
+const downloadProtocol =
+  typeof window !== "undefined" && window.location?.protocol
+    ? window.location.protocol
+    : "http:";
 function App() {
   const [project, setProject] = useState(null);
   const [frames, setFrames] = useState([]);
@@ -21,6 +46,9 @@ function App() {
   const [error, setError] = useState("");
   const [renderJob, setRenderJob] = useState(null);
   const [renderDebug, setRenderDebug] = useState(null);
+  const [renderPreset, setRenderPreset] = useState("small");
+  const [electronDownloads, setElectronDownloads] = useState([]);
+  const [electronExtractLauncherUrl, setElectronExtractLauncherUrl] = useState("");
   const [uploadProgress, setUploadProgress] = useState({
     active: false,
     label: "",
@@ -67,7 +95,8 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    createProject(`Project ${new Date().toLocaleString()}`)
+    waitForServerReady()
+      .then(() => createProject(`Project ${new Date().toLocaleString()}`))
       .then(async (value) => {
         if (!mounted) return;
         setProject(value);
@@ -75,6 +104,54 @@ function App() {
       })
       .catch((err) => setError(err.message));
 
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_ELECTRON_DOWNLOAD_URL && import.meta.env.VITE_ELECTRON_DOWNLOAD_URL.trim()) {
+      setElectronDownloads([import.meta.env.VITE_ELECTRON_DOWNLOAD_URL.trim()]);
+      return;
+    }
+    let mounted = true;
+    getLatestElectronDownload()
+      .then((payload) => {
+        if (!mounted || (!payload?.downloadUrl && !Array.isArray(payload?.partDownloadUrls))) {
+          return;
+        }
+        const rawUrls =
+          Array.isArray(payload?.partDownloadUrls) && payload.partDownloadUrls.length > 0
+            ? payload.partDownloadUrls
+            : [payload.downloadUrl];
+        const resolvedUrls = rawUrls
+          .filter(Boolean)
+          .map((url) =>
+            isFileProtocol
+              ? `http://127.0.0.1:4000${url}`
+              : isWebProtocol
+                ? `${downloadProtocol}//${downloadHost}:4000${url}`
+                : `http://127.0.0.1:4000${url}`
+          );
+        setElectronDownloads(resolvedUrls);
+        if (payload?.launcherDownloadUrl) {
+          const launcherUrl = isFileProtocol
+            ? `http://127.0.0.1:4000${payload.launcherDownloadUrl}`
+            : isWebProtocol
+              ? `${downloadProtocol}//${downloadHost}:4000${payload.launcherDownloadUrl}`
+              : `http://127.0.0.1:4000${payload.launcherDownloadUrl}`;
+          setElectronExtractLauncherUrl(launcherUrl);
+        } else {
+          setElectronExtractLauncherUrl("");
+        }
+      })
+      .catch(() => {
+        if (!mounted) {
+          return;
+        }
+        setElectronDownloads([]);
+        setElectronExtractLauncherUrl("");
+      });
     return () => {
       mounted = false;
     };
@@ -111,10 +188,16 @@ function App() {
   const renderProgressLabel = renderJob
     ? `${Number(renderJob.progress || 0).toFixed(2)}%`
     : "0.00%";
+  const currentPresetHint = RENDER_PRESET_HINTS[renderPreset] || RENDER_PRESET_HINTS.small;
 
   async function onUploadFiles(event) {
     const selected = Array.from(event.target.files || []);
-    if (!project || selected.length === 0) return;
+    if (selected.length === 0) return;
+    if (!project) {
+      setError("Backend is still starting. Please wait a few seconds and try again.");
+      event.target.value = "";
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -170,7 +253,12 @@ function App() {
 
   async function onUploadZip(event) {
     const zipFile = event.target.files?.[0];
-    if (!project || !zipFile) return;
+    if (!zipFile) return;
+    if (!project) {
+      setError("Backend is still starting. Please wait a few seconds and try again.");
+      event.target.value = "";
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -242,7 +330,7 @@ function App() {
     setBusy(true);
     setError("");
     try {
-      const createdJob = await startRender(project.id);
+      const createdJob = await startRender(project.id, { preset: renderPreset });
       setRenderJob(createdJob);
       setRenderDebug(null);
     } catch (err) {
@@ -270,6 +358,38 @@ function App() {
       <p className="muted">
         Upload up to 10,000 photos, adjust frame pause and transitions, then render MP4 (1080p
         30fps).
+      </p>
+      <p className="muted">
+        Desktop app:{" "}
+        {electronDownloads.length > 0 ? (
+          electronDownloads.length === 1 && !electronExtractLauncherUrl ? (
+            <a href={electronDownloads[0]} target="_blank" rel="noreferrer">
+              Download Electron build
+            </a>
+          ) : (
+            <span>
+              {electronExtractLauncherUrl ? (
+                <>
+                  <a href={electronExtractLauncherUrl} target="_blank" rel="noreferrer">
+                    Download auto-extract launcher
+                  </a>
+                  {" | "}
+                </>
+              ) : null}
+              Download Electron build volumes:{" "}
+              {electronDownloads.map((url, index) => (
+                <span key={url}>
+                  {index > 0 ? ", " : ""}
+                  <a href={url} target="_blank" rel="noreferrer">
+                    part {index + 1}
+                  </a>
+                </span>
+              ))}
+            </span>
+          )
+        ) : (
+          <span>build not found yet</span>
+        )}
       </p>
 
       {error && <p className="error">{error}</p>}
@@ -334,6 +454,22 @@ function App() {
               }
             />
           </label>
+          <div className="presetRow">
+            <label>
+              Render preset
+              <select
+                value={renderPreset}
+                onChange={(event) => setRenderPreset(event.target.value)}
+              >
+                {RENDER_PRESET_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="presetHint">{currentPresetHint}</span>
+          </div>
         </div>
       </section>
 
@@ -394,6 +530,13 @@ function App() {
             {renderJob
               ? `Status: ${renderJob.status}, ${renderProgressLabel}`
               : "Ready to render"}
+          </p>
+          <p className="muted">
+            Preset:{" "}
+            <code>
+              {RENDER_PRESET_OPTIONS.find((item) => item.value === renderPreset)?.label ||
+                "Small size"}
+            </code>
           </p>
           {renderJob?.id && (
             <p className="muted">

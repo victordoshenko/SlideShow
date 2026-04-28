@@ -7,3 +7,9 @@ frontend/dist/
 
 .DS_Store
 Thumbs.db
+releases/SlideShow-win32-x64/
+releases/win-unpacked/
+releases/*.zip
+releases/*.zip.*
+releases/*.extract.cmd
+releases/latest-electron.json

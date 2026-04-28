@@ -2,7 +2,14 @@ const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
 const { v4: uuidv4 } = require("uuid");
-const { RENDERS_DIR, RENDER_CHUNK_SIZE } = require("../config");
+const {
+  RENDERS_DIR,
+  RENDER_CHUNK_SIZE,
+  TRANSITION_OUTPUT_FPS,
+  VIDEO_CRF,
+  OPENH264_TRANSITION_BITRATE_K,
+  OPENH264_BASE_BITRATE_K,
+} = require("../config");
 const { ensureDir } = require("../utils/files");
 const { run, get, all } = require("./db");
 const { getProject } = require("./projectService");
@@ -14,8 +21,33 @@ let activeJob = null;
 let configuredFfmpegPath = null;
 let selectedVideoEncoder = null;
 const renderDebugState = new Map();
+const renderJobOptionsState = new Map();
 
-async function createRenderJob(projectId) {
+const RENDER_PRESET_DEFAULT = "small";
+const RENDER_PRESETS = {
+  quality: { transitionFps: 12, transitionBitrateK: 2200, baseBitrateK: 1700, crf: 21 },
+  balanced: { transitionFps: 10, transitionBitrateK: 1500, baseBitrateK: 1200, crf: 24 },
+  small: {
+    transitionFps: TRANSITION_OUTPUT_FPS,
+    transitionBitrateK: OPENH264_TRANSITION_BITRATE_K,
+    baseBitrateK: OPENH264_BASE_BITRATE_K,
+    crf: VIDEO_CRF,
+  },
+};
+
+function normalizeRenderPreset(value) {
+  const key = String(value || "").trim().toLowerCase();
+  if (key === "quality" || key === "balanced" || key === "small") {
+    return key;
+  }
+  return RENDER_PRESET_DEFAULT;
+}
+
+function resolveRenderParams(preset) {
+  return RENDER_PRESETS[normalizeRenderPreset(preset)] || RENDER_PRESETS[RENDER_PRESET_DEFAULT];
+}
+
+async function createRenderJob(projectId, options = {}) {
   const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found");
@@ -29,6 +61,9 @@ async function createRenderJob(projectId) {
     [jobId, projectId, now, now]
   );
   queue.push(jobId);
+  renderJobOptionsState.set(jobId, {
+    preset: normalizeRenderPreset(options.preset),
+  });
   renderDebugState.set(jobId, {
     stage: "queued",
     bootstrapStep: null,
@@ -318,6 +353,7 @@ async function renderFramesWithInlineXfade({
   videoEncoder,
   outputPath,
   filterScriptPath,
+  renderParams,
   onStderr,
   timeoutMs = 0,
 }) {
@@ -341,12 +377,7 @@ async function renderFramesWithInlineXfade({
     "[vout]",
     "-c:v",
     videoEncoder,
-    "-b:v",
-    "10M",
-    "-maxrate",
-    "14M",
-    "-bufsize",
-    "20M",
+    ...buildVideoQualityArgs(videoEncoder, true, renderParams),
     "-g",
     "60",
     "-bf",
@@ -356,7 +387,7 @@ async function renderFramesWithInlineXfade({
     "-pix_fmt",
     "yuv420p",
     "-r",
-    "30",
+    `${renderParams.transitionFps}`,
     "-movflags",
     "+faststart",
     "-y",
@@ -372,6 +403,25 @@ function buildAdaptiveRenderTimeoutMs(expectedDurationSec, minTimeoutMs = 240000
   const durationMs = Math.max(0, Number(expectedDurationSec || 0) * 1000);
   const adaptive = durationMs * 2.5 + 120000;
   return Math.max(minTimeoutMs, Math.round(adaptive));
+}
+
+function buildVideoQualityArgs(videoEncoder, isTransitionPath = false, renderParams = RENDER_PRESETS.small) {
+  // CRF/preset are ideal for x264; OpenH264 does not reliably support them.
+  if (videoEncoder === "libx264") {
+    return ["-crf", `${renderParams.crf}`, "-preset", "fast"];
+  }
+  // More aggressive OpenH264 defaults to reduce output size for slideshow content.
+  const targetK = isTransitionPath ? renderParams.transitionBitrateK : renderParams.baseBitrateK;
+  const maxK = Math.round(targetK * 1.35);
+  const bufK = Math.round(targetK * 2.0);
+  return [
+    "-b:v",
+    `${targetK}k`,
+    "-maxrate",
+    `${maxK}k`,
+    "-bufsize",
+    `${bufK}k`,
+  ];
 }
 
 function runFfmpegCommand(ffmpegPath, args, envPatch = {}, onStderr, timeoutMs = 0) {
@@ -476,6 +526,9 @@ async function runRender(jobId) {
   const outputPath = path.join(RENDERS_DIR, `${jobId}.mp4`);
   setBootstrapStep("set-running-state");
   await setJobState(jobId, { status: "running", progress: 1, outputPath });
+  const renderOptions = renderJobOptionsState.get(jobId) || { preset: RENDER_PRESET_DEFAULT };
+  const preset = normalizeRenderPreset(renderOptions.preset);
+  const renderParams = resolveRenderParams(preset);
   const transitionRequested = Boolean(project.transitionEnabled);
   const useInlineXfade = shouldUseInlineXfade(frames, project);
   const useSimpleConcat = !transitionRequested || frames.length < 2;
@@ -522,7 +575,7 @@ async function runRender(jobId) {
   const videoEncoder = resolveVideoEncoder();
   setBootstrapStep(
     "select-render-path",
-    `transition=${transitionRequested} inlineXfade=${useInlineXfade} segmentedXfade=${useSegmentedXfade} concat=${useSimpleConcat}`
+    `preset=${preset} transition=${transitionRequested} inlineXfade=${useInlineXfade} segmentedXfade=${useSegmentedXfade} concat=${useSimpleConcat}`
   );
 
   const ffmpegEnv = buildFfmpegEnv(ffmpegPath);
@@ -560,12 +613,7 @@ async function runRender(jobId) {
         "vfr",
         "-c:v",
         videoEncoder,
-        "-b:v",
-        "10M",
-        "-maxrate",
-        "14M",
-        "-bufsize",
-        "20M",
+        ...buildVideoQualityArgs(videoEncoder, false, renderParams),
         "-g",
         "60",
         "-bf",
@@ -589,6 +637,7 @@ async function runRender(jobId) {
         videoEncoder,
         outputPath,
         filterScriptPath,
+        renderParams,
         timeoutMs: mainTimeoutMs,
         onStderr: (line) => {
           const text = String(line || "");
@@ -628,6 +677,7 @@ async function runRender(jobId) {
           videoEncoder,
           outputPath: chunkOutputPath,
           filterScriptPath: chunkScriptPath,
+          renderParams,
           timeoutMs: chunkTimeoutMs,
           onStderr: (line) => {
             const text = String(line || "");
@@ -666,12 +716,7 @@ async function runRender(jobId) {
         "[vout]",
         "-c:v",
         videoEncoder,
-        "-b:v",
-        "10M",
-        "-maxrate",
-        "14M",
-        "-bufsize",
-        "20M",
+        ...buildVideoQualityArgs(videoEncoder, true, renderParams),
         "-g",
         "60",
         "-bf",
@@ -681,7 +726,7 @@ async function runRender(jobId) {
         "-pix_fmt",
         "yuv420p",
         "-r",
-        "30",
+        `${renderParams.transitionFps}`,
         "-movflags",
         "+faststart",
         "-y",
@@ -760,6 +805,7 @@ async function runRender(jobId) {
     await setJobState(jobId, { status: "failed", progress: 0, error: detail });
     updateRenderDebug(jobId, { stage: "finalizing", lastMessage: detail });
   } finally {
+    renderJobOptionsState.delete(jobId);
     fs.rmSync(listFilePath, { force: true });
     fs.rmSync(filterScriptPath, { force: true });
     fs.rmSync(chunkFilterScriptPath, { force: true });

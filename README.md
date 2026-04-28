@@ -1,27 +1,29 @@
 # SlideShow
 
-Веб-приложение для сборки видео-слайдшоу из большого количества фотографий (до 10 000), с настройкой длительности кадра и плавными переходами.
+Приложение для сборки видео-слайдшоу из большого количества фотографий (до 10 000), с плавными переходами, прогрессом рендера и desktop-сборкой на Electron.
 
-## Что умеет
+## Возможности
 
-- Загрузка фотографий файлами или ZIP-архивом.
-- Нормализация изображений при импорте (`sharp`, авто-ориентация EXIF).
-- Предпросмотр кадров во frontend.
-- Рендер MP4 1080p/30fps через `ffmpeg`.
-- Плавные переходы (`xfade`) для больших наборов изображений.
-- Фоновая очередь рендеров с прогрессом и debug-статусом.
+- Импорт фото файлами и ZIP-архивом.
+- Нормализация ориентации изображений при импорте (`sharp.rotate()`).
+- Рендер MP4 через `ffmpeg` с автоматическим выбором режима.
+- Переходы `xfade` для больших проектов (включая сегментный рендер).
+- Прогресс рендера + debug-статус (`stage`, `bootstrapStep`, `renderMode`, `lastMessage`).
+- Пресеты качества рендера в UI: `Quality` / `Balanced` / `Small size` (по умолчанию `Small size`).
+- Electron desktop build + автоматическая публикация актуального ZIP в `releases`.
 
 ## Технологии
 
 - Frontend: React + Vite
 - Backend: Node.js + Express + SQLite
-- Обработка медиа: FFmpeg + Sharp
+- Media: FFmpeg + Sharp
+- Desktop: Electron + electron-packager
 
 ## Требования
 
 - Node.js 18+
 - npm
-- Установленный `ffmpeg` в `PATH` **или** переменная окружения `FFMPEG_PATH`
+- Установленный `ffmpeg` в `PATH` или `FFMPEG_PATH`
 
 ## Установка
 
@@ -33,22 +35,16 @@ npm install --prefix frontend
 
 ## Запуск
 
-### Режим разработки (frontend + backend одновременно)
+### Dev (frontend + backend)
 
 ```bash
 npm run dev
 ```
 
 - Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:4000`
+- Backend: `http://localhost:4000`
 
-### Production-сборка frontend
-
-```bash
-npm run build
-```
-
-### Запуск backend
+### Только backend
 
 ```bash
 npm run start
@@ -60,6 +56,29 @@ npm run start
 npm test
 ```
 
+## Electron
+
+### Локальный запуск Electron
+
+```bash
+npm run electron:dev
+```
+
+### Сборка Electron (рекомендуемый путь)
+
+```bash
+npm run electron:build
+```
+
+Что делает команда:
+
+1. Собирает frontend.
+2. Пересобирает `sqlite3` под Electron (`electron-rebuild`).
+3. Упаковывает приложение в `releases/SlideShow-win32-x64`.
+4. Создает ZIP с таймстампом:
+   - `SlideShow-win32-x64-portable-ГГГГММДДЧЧММСС.zip`
+5. Обновляет `releases/latest-electron.json` для фронтовой ссылки на «последний» архив.
+
 ## Конфигурация backend
 
 Файл: `backend/src/config.js`
@@ -68,73 +87,86 @@ npm test
 
 - `PORT` (по умолчанию `4000`)
 - `MAX_FILES` (по умолчанию `10000`)
-- `RENDER_CHUNK_SIZE` (по умолчанию `50`, минимум `2`)
+- `RENDER_CHUNK_SIZE` (по умолчанию `50`)
+- `TRANSITION_OUTPUT_FPS`
+- `VIDEO_CRF`
+- `OPENH264_TRANSITION_BITRATE_K`
+- `OPENH264_BASE_BITRATE_K`
 
-Через env можно переопределить, например:
+Пример env (Windows):
 
 ```bash
 set RENDER_CHUNK_SIZE=40
+set TRANSITION_OUTPUT_FPS=8
 set FFMPEG_PATH=C:\path\to\ffmpeg.exe
 ```
 
-## Как устроен рендер
+## Рендер-пайплайн
 
-Рендерер выбирает режим автоматически:
+Режим выбирается автоматически:
 
-- `concat` — когда переходы выключены или кадров меньше 2.
-- `inlineXfade` — когда переходы включены и команда безопасна по длине.
-- `segmentedXfade` — для больших проектов: рендер чанками с `xfade`, затем merge с переходами.
+- `concat` — переходы выключены или < 2 кадров.
+- `inlineXfade` — переходы включены и фильтр помещается в лимиты.
+- `segmentedXfade` — большие проекты: рендер чанками + merge с переходами.
 
-Для стабильности используются:
+Стабильность:
 
-- `-filter_complex_script` (чтобы не упираться в лимит длины командной строки Windows),
-- адаптивные таймауты ffmpeg (вместо фиксированного 4-минутного лимита),
-- пошаговый прогресс рендера (включая чанки и merge-этап).
+- `-filter_complex_script` (обход лимита длины команды в Windows),
+- адаптивные таймауты ffmpeg,
+- прогресс по timemark/frame с heartbeat-обновлениями.
 
 ## API (кратко)
 
-### Health
+### Сервис
 
 - `GET /api/health`
 
 ### Проекты
 
-- `POST /api/projects` — создать проект
-- `GET /api/projects/:id` — получить проект
-- `PATCH /api/projects/:id/settings` — обновить настройки
-- `POST /api/projects/:id/upload/files` — загрузка фото
-- `POST /api/projects/:id/upload/zip` — загрузка ZIP
-- `GET /api/projects/:id/frames?offset=0&limit=200` — список кадров
-- `GET /api/projects/:id/upload-status` — статус импорта
-- `POST /api/projects/:id/render` — старт рендера
+- `POST /api/projects`
+- `GET /api/projects/:id`
+- `PATCH /api/projects/:id/settings`
+- `POST /api/projects/:id/upload/files`
+- `POST /api/projects/:id/upload/zip`
+- `GET /api/projects/:id/frames?offset=0&limit=200`
+- `GET /api/projects/:id/upload-status`
+- `POST /api/projects/:id/render` (поддерживает `preset` в body)
 
 ### Рендер-джобы
 
-- `GET /api/render-jobs/:id` — статус джобы
-- `GET /api/render-jobs/:id/debug` — debug-информация (`stage`, `bootstrapStep`, `renderMode`, `lastMessage`)
-- `GET /api/render-jobs/:id/download` — скачать MP4
-- `GET /api/render-jobs/:id/preview` — просмотр MP4
+- `GET /api/render-jobs/:id`
+- `GET /api/render-jobs/:id/debug`
+- `GET /api/render-jobs/:id/download`
+- `GET /api/render-jobs/:id/preview`
 
-## Хранилище
+### Desktop downloads
 
-Backend использует каталог `backend/storage`:
+- `GET /api/downloads/latest-electron` — возвращает актуальный ZIP (`downloadUrl`)
+- `GET /downloads/<file>` — раздача файлов из `releases`
 
-- `projects/` — исходные изображения по проектам
-- `renders/` — итоговые видео
-- `tmp/` — временные файлы загрузок
-- `slideshow.db` — база SQLite
+## Структура хранения
+
+`backend/storage`:
+
+- `projects/` — исходные изображения
+- `renders/` — итоговые MP4
+- `tmp/` — временные файлы импорта
+- `slideshow.db` — SQLite
+
+`releases/`:
+
+- Electron-артефакты и ZIP-архивы desktop-версий
 
 ## Частые проблемы
 
 - `FFmpeg executable was not found`  
-  Проверьте `FFMPEG_PATH` или наличие `ffmpeg` в `PATH`.
+  Проверьте `FFMPEG_PATH`/`PATH`.
 
-- Рендер падает на больших проектах  
-  Проверьте `/api/render-jobs/:id/debug` и поле `lastMessage`; при необходимости уменьшите `RENDER_CHUNK_SIZE` (например, до `30-40`).
+- Зависание Electron/белый экран  
+  Проверьте `%APPDATA%\SlideShow\logs\main.log` и пришлите последние строки.
 
 - Нет плавных переходов  
-  Убедитесь, что включен `Smooth transition` и `transitionDurationMs > 0`.  
-  В debug проверьте `renderMode` — должен быть `inlineXfade` или `segmentedXfade`.
+  Убедитесь, что `Smooth transition` включен, и смотрите `renderMode` в debug.
 
 ## Лицензия
 

@@ -150,7 +150,9 @@ router.get("/:id/upload-status", async (req, res) => {
 
 router.post("/:id/render", async (req, res) => {
   try {
-    const job = await createRenderJob(req.params.id);
+    const job = await createRenderJob(req.params.id, {
+      preset: req.body?.preset,
+    });
     res.status(201).json(job);
   } catch (error) {
     res.status(400).json({ error: error.message });

@@ -1,13 +1,27 @@
+const isFileProtocol =
+  typeof window !== "undefined" && window.location?.protocol === "file:";
+const isWebProtocol =
+  typeof window !== "undefined" &&
+  (window.location?.protocol === "http:" || window.location?.protocol === "https:");
 const FRONTEND_HOST =
   typeof window !== "undefined" && window.location?.hostname
     ? window.location.hostname
-    : "localhost";
+    : "127.0.0.1";
 const FRONTEND_PROTOCOL =
   typeof window !== "undefined" && window.location?.protocol
     ? window.location.protocol
     : "http:";
-const API_BASE = `${FRONTEND_PROTOCOL}//${FRONTEND_HOST}:4000/api`;
-const MEDIA_BASE = `${FRONTEND_PROTOCOL}//${FRONTEND_HOST}:4000`;
+const SERVER_ORIGIN = isFileProtocol
+  ? "http://127.0.0.1:4000"
+  : isWebProtocol
+    ? `${FRONTEND_PROTOCOL}//${FRONTEND_HOST}:4000`
+    : "http://127.0.0.1:4000";
+const API_BASE = `${SERVER_ORIGIN}/api`;
+const MEDIA_BASE = SERVER_ORIGIN;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function parseJson(response) {
   const data = await response.json().catch(() => ({}));
@@ -122,6 +136,26 @@ export async function createProject(name) {
   return parseJson(response);
 }
 
+export async function waitForServerReady({
+  attempts = 30,
+  delayMs = 350,
+} = {}) {
+  let lastError = null;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const response = await fetch(`${API_BASE}/health`);
+      const data = await parseJson(response);
+      if (data?.ok) {
+        return true;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(delayMs);
+  }
+  throw lastError || new Error("Backend is not ready yet");
+}
+
 export async function updateSettings(projectId, settings) {
   const response = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
     method: "PATCH",
@@ -168,9 +202,11 @@ export async function getUploadStatus(projectId) {
   return parseJson(response);
 }
 
-export async function startRender(projectId) {
+export async function startRender(projectId, options = {}) {
   const response = await fetch(`${API_BASE}/projects/${projectId}/render`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options),
   });
   return parseJson(response);
 }
@@ -182,6 +218,11 @@ export async function getRenderJob(jobId) {
 
 export async function getRenderJobDebug(jobId) {
   const response = await fetch(`${API_BASE}/render-jobs/${jobId}/debug`);
+  return parseJson(response);
+}
+
+export async function getLatestElectronDownload() {
+  const response = await fetch(`${API_BASE}/downloads/latest-electron`);
   return parseJson(response);
 }
 
