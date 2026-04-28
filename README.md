@@ -1,6 +1,8 @@
 # SlideShow
 
-[![Deploy Pages](https://github.com/victordoshenko/SlideShow/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/victordoshenko/SlideShow/actions/workflows/deploy-pages.yml)
+[Deploy Pages](https://github.com/victordoshenko/SlideShow/actions/workflows/deploy-pages.yml)
+
+[https://victordoshenko.github.io/SlideShow/](https://victordoshenko.github.io/SlideShow/)
 
 Приложение для сборки видео-слайдшоу из большого количества фотографий (до 10 000), с плавными переходами, прогрессом рендера и desktop-сборкой на Electron.
 
@@ -78,7 +80,7 @@ npm run electron:build
 2. Пересобирает `sqlite3` под Electron (`electron-rebuild`).
 3. Упаковывает приложение в `releases/SlideShow-win32-x64`.
 4. Создает ZIP с таймстампом:
-   - `SlideShow-win32-x64-portable-ГГГГММДДЧЧММСС.zip`
+  - `SlideShow-win32-x64-portable-ГГГГММДДЧЧММСС.zip`
 5. Обновляет `releases/latest-electron.json` для фронтовой ссылки на «последний» архив.
 
 ## Конфигурация backend
@@ -162,15 +164,12 @@ set FFMPEG_PATH=C:\path\to\ffmpeg.exe
 ## Частые проблемы
 
 - `FFmpeg executable was not found`  
-  Проверьте `FFMPEG_PATH`/`PATH`.
-
+Проверьте `FFMPEG_PATH`/`PATH`.
 - Зависание Electron/белый экран  
-  Проверьте `%APPDATA%\SlideShow\logs\main.log` и пришлите последние строки.
-
+Проверьте `%APPDATA%\SlideShow\logs\main.log` и пришлите последние строки.
 - Нет плавных переходов  
-  Убедитесь, что `Smooth transition` включен, и смотрите `renderMode` в debug.
+Убедитесь, что `Smooth transition` включен, и смотрите `renderMode` в debug.
 
 ## Лицензия
 
 ISC
-
