@@ -9,9 +9,9 @@
   "launcherFileName": "SlideShow-win32-x64-portable-lite-20260428220306.zip.extract.cmd",
   "partSizeMb": 90,
   "partDownloadUrls": [
-    "https://github.com/victordoshenko/SlideShow/blob/main/releases/SlideShow-win32-x64-portable-lite-20260428220306.zip.001",
-    "https://github.com/victordoshenko/SlideShow/blob/main/releases/SlideShow-win32-x64-portable-lite-20260428220306.zip.002"
+    "https://github.com/victordoshenko/SlideShow/raw/main/releases/SlideShow-win32-x64-portable-lite-20260428220306.zip.001",
+    "https://github.com/victordoshenko/SlideShow/raw/main/releases/SlideShow-win32-x64-portable-lite-20260428220306.zip.002"
   ],
-  "launcherDownloadUrl": "https://github.com/victordoshenko/SlideShow/blob/main/releases/SlideShow-win32-x64-portable-lite-20260428220306.zip.extract.cmd",
+  "launcherDownloadUrl": "https://github.com/victordoshenko/SlideShow/raw/main/releases/SlideShow-win32-x64-portable-lite-20260428220306.zip.extract.cmd",
   "builtAt": "2026-04-28T19:04:29.704Z"
 }

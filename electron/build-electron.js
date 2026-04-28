@@ -198,9 +198,9 @@ function main() {
         launcherFileName,
         partSizeMb: PART_SIZE_MB,
         partDownloadUrls: parts.map(
-          (name) => `https://github.com/${GITHUB_REPO}/blob/${GITHUB_BRANCH}/releases/${name}`
+          (name) => `https://github.com/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/releases/${name}`
         ),
-        launcherDownloadUrl: `https://github.com/${GITHUB_REPO}/blob/${GITHUB_BRANCH}/releases/${launcherFileName}`,
+        launcherDownloadUrl: `https://github.com/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/releases/${launcherFileName}`,
         builtAt: new Date().toISOString(),
       },
       null,
