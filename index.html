@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SlideShow Downloads</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Segoe UI, Arial, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .wrap {
+        max-width: 760px;
+        margin: 40px auto;
+        padding: 0 20px;
+      }
+      .card {
+        background: #111827;
+        border: 1px solid #374151;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      a {
+        color: #93c5fd;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .muted {
+        color: #94a3b8;
+      }
+      ul {
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>SlideShow Desktop</h1>
+      <p class="muted">Download latest Electron build artifacts.</p>
+
+      <section class="card">
+        <h2>Downloads</h2>
+        <div id="content" class="muted">Loading links...</div>
+      </section>
+    </main>
+
+    <script>
+      const repo = "victordoshenko/SlideShow";
+      const releasesUrl = `https://github.com/${repo}/releases`;
+
+      async function loadManifest() {
+        const candidates = ["./latest-electron.json", "./frontend/public/latest-electron.json"];
+        for (const url of candidates) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) continue;
+            return await response.json();
+          } catch (_) {}
+        }
+        return null;
+      }
+
+      function renderFallback() {
+        const content = document.getElementById("content");
+        content.innerHTML = `Links are not available yet. <a href="${releasesUrl}" target="_blank" rel="noreferrer">Open GitHub Releases</a>.`;
+      }
+
+      function renderManifest(manifest) {
+        const content = document.getElementById("content");
+        const parts = Array.isArray(manifest?.partDownloadUrls) ? manifest.partDownloadUrls : [];
+        const launcher = manifest?.launcherDownloadUrl || "";
+        if (!launcher && parts.length === 0) {
+          renderFallback();
+          return;
+        }
+        const partLinks = parts
+          .map((url, i) => `<li><a href="${url}" target="_blank" rel="noreferrer">Download part ${i + 1}</a></li>`)
+          .join("");
+        content.innerHTML = `
+          ${launcher ? `<p><a href="${launcher}" target="_blank" rel="noreferrer">Download auto-extract launcher (.cmd)</a></p>` : ""}
+          ${parts.length ? `<ul>${partLinks}</ul>` : ""}
+          <p class="muted">Download all parts to one folder, run the .cmd, then start SlideShow.exe.</p>
+        `;
+      }
+
+      loadManifest().then((manifest) => {
+        if (manifest) {
+          renderManifest(manifest);
+        } else {
+          renderFallback();
+        }
+      });
+    </script>
+  </body>
+</html>
