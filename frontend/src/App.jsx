@@ -51,6 +51,22 @@ function parseEnvLinks(raw) {
     .filter(Boolean);
 }
 
+async function forceDownloadFile(url, fallbackName = "download.bin") {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("Failed to download file");
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fallbackName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 function App() {
   const [project, setProject] = useState(null);
   const [frames, setFrames] = useState([]);
@@ -457,6 +473,20 @@ function App() {
     setActiveFrameIndex(index);
   }
 
+  async function onDownloadLauncher(event) {
+    event.preventDefault();
+    if (!electronExtractLauncherUrl) {
+      return;
+    }
+    try {
+      const fileName = electronExtractLauncherUrl.split("/").pop() || "extract.cmd";
+      await forceDownloadFile(electronExtractLauncherUrl, fileName);
+    } catch {
+      // Fallback to regular navigation if fetch-based download fails.
+      window.open(electronExtractLauncherUrl, "_blank", "noopener,noreferrer");
+    }
+  }
+
   if (LANDING_MODE) {
     return (
       <main className="layout">
@@ -468,7 +498,7 @@ function App() {
           <h2>Downloads</h2>
           {electronExtractLauncherUrl && (
             <p>
-              <a href={electronExtractLauncherUrl} target="_blank" rel="noreferrer">
+              <a href={electronExtractLauncherUrl} onClick={onDownloadLauncher}>
                 Download auto-extract launcher
               </a>
             </p>
@@ -522,7 +552,7 @@ function App() {
             <span>
               {electronExtractLauncherUrl ? (
                 <>
-                  <a href={electronExtractLauncherUrl} target="_blank" rel="noreferrer">
+                  <a href={electronExtractLauncherUrl} onClick={onDownloadLauncher}>
                     Download auto-extract launcher
                   </a>
                   {" | "}

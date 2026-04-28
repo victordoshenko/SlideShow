@@ -1,12 +1,12 @@
 {
-  "fileName": "SlideShow-win32-x64-portable-lite-20260428221645.zip.001",
-  "archiveBaseName": "SlideShow-win32-x64-portable-lite-20260428221645.zip",
+  "fileName": "SlideShow-win32-x64-portable-lite-20260428222410.zip.001",
+  "archiveBaseName": "SlideShow-win32-x64-portable-lite-20260428222410.zip",
   "multipart": true,
   "parts": [
-    "SlideShow-win32-x64-portable-lite-20260428221645.zip.001",
-    "SlideShow-win32-x64-portable-lite-20260428221645.zip.002"
+    "SlideShow-win32-x64-portable-lite-20260428222410.zip.001",
+    "SlideShow-win32-x64-portable-lite-20260428222410.zip.002"
   ],
-  "launcherFileName": "SlideShow-win32-x64-portable-lite-20260428221645.zip.extract.cmd",
+  "launcherFileName": "SlideShow-win32-x64-portable-lite-20260428222410.zip.extract.cmd",
   "partSizeMb": 90,
-  "builtAt": "2026-04-28T19:18:06.176Z"
+  "builtAt": "2026-04-28T19:25:30.903Z"
 }
