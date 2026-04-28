@@ -51,22 +51,6 @@ function parseEnvLinks(raw) {
     .filter(Boolean);
 }
 
-async function forceDownloadFile(url, fallbackName = "download.bin") {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Failed to download file");
-  }
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = fallbackName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(objectUrl);
-}
-
 function buildExtractCmd(archiveBaseName, partNames) {
   const copyList = partNames.map((name) => `"${name}"`).join("+");
   return [
@@ -507,17 +491,10 @@ function App() {
 
   async function onDownloadLauncher(event) {
     event.preventDefault();
-    if (!electronExtractLauncherUrl && electronDownloads.length === 0) {
+    if (electronDownloads.length === 0) {
       return;
     }
     try {
-      const fileNameFromUrl =
-        (electronExtractLauncherUrl && electronExtractLauncherUrl.split("/").pop()) || "";
-      const launcherFileName = (fileNameFromUrl.split("?")[0] || "extract.cmd").trim();
-      if (electronExtractLauncherUrl) {
-        await forceDownloadFile(electronExtractLauncherUrl, launcherFileName);
-        return;
-      }
       const partNames = electronDownloads
         .map((url) => {
           const fileName = (url.split("/").pop() || "").split("?")[0];
@@ -536,9 +513,7 @@ function App() {
       link.click();
       link.remove();
       URL.revokeObjectURL(objectUrl);
-    } catch {
-      // no-op: if download fails, user can still download archive parts directly
-    }
+    } catch {}
   }
 
   if (LANDING_MODE) {
