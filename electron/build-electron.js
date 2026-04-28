@@ -200,7 +200,7 @@ function main() {
         partDownloadUrls: parts.map(
           (name) => `https://github.com/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/releases/${name}`
         ),
-        launcherDownloadUrl: `https://github.com/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/releases/${launcherFileName}`,
+        launcherDownloadUrl: `https://github.com/${GITHUB_REPO}/blob/${GITHUB_BRANCH}/releases/${launcherFileName}?raw=1`,
         builtAt: new Date().toISOString(),
       },
       null,
