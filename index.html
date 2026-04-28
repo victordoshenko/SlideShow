@@ -72,8 +72,7 @@
       function renderManifest(manifest) {
         const content = document.getElementById("content");
         const parts = Array.isArray(manifest?.partDownloadUrls) ? manifest.partDownloadUrls : [];
-        const launcher = manifest?.launcherDownloadUrl || "";
-        if (!launcher && parts.length === 0) {
+        if (parts.length === 0) {
           renderFallback();
           return;
         }
@@ -81,35 +80,63 @@
           .map((url, i) => `<li><a href="${url}" target="_blank" rel="noreferrer">Download part ${i + 1}</a></li>`)
           .join("");
         content.innerHTML = `
-          ${launcher ? `<p><a href="${launcher}" id="launcher-link">Download auto-extract launcher (.cmd)</a></p>` : ""}
+          <p><a href="#" id="launcher-link">Download auto-extract launcher (.cmd)</a></p>
           ${parts.length ? `<ul>${partLinks}</ul>` : ""}
           <p class="muted">Download all parts to one folder, run the .cmd, then start SlideShow.exe.</p>
         `;
-        if (launcher) {
-          const launcherLink = document.getElementById("launcher-link");
-          if (launcherLink) {
-            launcherLink.addEventListener("click", async (event) => {
-              event.preventDefault();
-              try {
-                const response = await fetch(launcher);
-                if (!response.ok) {
-                  throw new Error("failed");
-                }
-                const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
-                const fileName = (launcher.split("/").pop() || "extract.cmd").split("?")[0];
-                const a = document.createElement("a");
-                a.href = objectUrl;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(objectUrl);
-              } catch (_) {
-                window.open(launcher, "_blank", "noopener,noreferrer");
-              }
-            });
-          }
+        const launcherLink = document.getElementById("launcher-link");
+        if (launcherLink) {
+          launcherLink.addEventListener("click", (event) => {
+            event.preventDefault();
+            const partNames = parts
+              .map((url) => {
+                const tail = (url.split("/").pop() || "").split("?")[0];
+                return decodeURIComponent(tail);
+              })
+              .filter(Boolean);
+            if (partNames.length === 0) {
+              return;
+            }
+            const archiveBase = partNames[0].replace(/\.\d{3}$/i, "");
+            const copyList = partNames.map((name) => `"${name}"`).join("+");
+            const cmd = [
+              "@echo off",
+              "setlocal",
+              `set "ARCHIVE_BASE=${archiveBase}"`,
+              `set "COPY_LIST=${copyList}"`,
+              "set \"WORK_ZIP=%TEMP%\\%ARCHIVE_BASE%\"",
+              "set \"TARGET_DIR=%~dp0%ARCHIVE_BASE%\"",
+              "if exist \"%WORK_ZIP%\" del /f /q \"%WORK_ZIP%\" >nul 2>nul",
+              "echo Combining multi-volume archive...",
+              "copy /b %COPY_LIST% \"%WORK_ZIP%\" >nul",
+              "if errorlevel 1 (",
+              "  echo Failed to combine archive parts. Ensure all parts are in this folder.",
+              "  pause",
+              "  exit /b 1",
+              ")",
+              "echo Extracting archive...",
+              "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -LiteralPath '%WORK_ZIP%' -DestinationPath '%TARGET_DIR%' -Force\"",
+              "if errorlevel 1 (",
+              "  echo Extraction failed.",
+              "  pause",
+              "  exit /b 1",
+              ")",
+              "del /f /q \"%WORK_ZIP%\" >nul 2>nul",
+              "echo Done. Extracted to:",
+              "echo %TARGET_DIR%",
+              "pause",
+              "",
+            ].join("\r\n");
+            const blob = new Blob([cmd], { type: "application/octet-stream" });
+            const objectUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = objectUrl;
+            a.download = `${archiveBase}.extract.cmd`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(objectUrl);
+          });
         }
       }
 
