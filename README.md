@@ -1,5 +1,7 @@
 # SlideShow
 
+[![Deploy Pages](https://github.com/victordoshenko/SlideShow/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/victordoshenko/SlideShow/actions/workflows/deploy-pages.yml)
+
 Приложение для сборки видео-слайдшоу из большого количества фотографий (до 10 000), с плавными переходами, прогрессом рендера и desktop-сборкой на Electron.
 
 ## Возможности
